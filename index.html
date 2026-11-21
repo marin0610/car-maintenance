@@ -1,0 +1,702 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>車検・メンテ記録</title>
+<style>
+  :root{
+    --navy:#173a5e; --navy2:#0f2a46; --ink:#26303b; --gray:#6b7684;
+    --bg:#edf0f4; --card:#ffffff; --line:#d8dee6;
+    --red:#c0392b; --red-bg:#fdecea; --orange:#d97a16; --orange-bg:#fff3e2;
+    --green:#2e7d32; --green-bg:#e8f4ea; --accent:#2f6db3;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  body{margin:0; font-family:-apple-system,"Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;
+       background:var(--bg); color:var(--ink); font-size:15px; line-height:1.55;}
+  header{background:linear-gradient(135deg,var(--navy),var(--navy2)); color:#fff; padding:16px 16px 12px;}
+  header h1{margin:0; font-size:20px; letter-spacing:.03em;}
+  header p{margin:4px 0 0; font-size:12px; opacity:.85;}
+  .carbar{display:flex; gap:8px; align-items:center; margin-top:12px;}
+  .carbar select{flex:1; padding:9px 10px; border-radius:8px; border:none; font-size:15px; background:#fff; color:var(--ink);}
+  .carbar button{background:rgba(255,255,255,.16); color:#fff; border:1px solid rgba(255,255,255,.4);
+                 border-radius:8px; padding:8px 10px; font-size:13px; cursor:pointer;}
+  nav.tabs{display:flex; background:var(--navy2); position:sticky; top:0; z-index:10;}
+  nav.tabs button{flex:1; background:none; border:none; color:#b9c7d8; padding:11px 0; font-size:14px; cursor:pointer;
+                  border-bottom:3px solid transparent;}
+  nav.tabs button.active{color:#fff; border-bottom-color:#f2b544; font-weight:700;}
+  main{max-width:760px; margin:0 auto; padding:14px 12px 40px;}
+  section.tab{display:none;}
+  section.tab.active{display:block;}
+  .card{background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px; margin-bottom:12px;}
+  .card h2{margin:0 0 10px; font-size:16px; color:var(--navy);}
+  .card h3{margin:14px 0 6px; font-size:14px; color:var(--navy);}
+  .due{border-left:6px solid var(--green); }
+  .due.soon{border-left-color:var(--orange); background:var(--orange-bg);}
+  .due.overdue{border-left-color:var(--red); background:var(--red-bg);}
+  .due.none{border-left-color:#b6bfca;}
+  .due .head{display:flex; justify-content:space-between; align-items:baseline; gap:8px;}
+  .due .type{font-weight:700; font-size:16px;}
+  .due .badge{font-weight:700; font-size:14px; white-space:nowrap;}
+  .due.overdue .badge{color:var(--red);}
+  .due.soon .badge{color:var(--orange);}
+  .due.ok .badge{color:var(--green);}
+  .due .meta{font-size:13px; color:var(--gray); margin-top:4px;}
+  .due .next{font-size:14px; margin-top:2px;}
+  label{display:block; font-size:13px; color:var(--gray); margin:10px 0 4px;}
+  input,select,textarea{width:100%; padding:9px 10px; border:1px solid var(--line); border-radius:8px;
+                        font-size:15px; background:#fff; color:var(--ink);}
+  textarea{resize:vertical; min-height:56px;}
+  .row{display:flex; gap:10px;} .row>div{flex:1;}
+  button.primary{background:var(--navy); color:#fff; border:none; border-radius:8px; padding:11px 16px;
+                 font-size:15px; font-weight:700; cursor:pointer; width:100%; margin-top:14px;}
+  button.sub{background:#fff; color:var(--navy); border:1px solid var(--navy); border-radius:8px;
+             padding:8px 12px; font-size:13px; cursor:pointer;}
+  button.danger{background:#fff; color:var(--red); border:1px solid var(--red); border-radius:8px;
+                padding:8px 12px; font-size:13px; cursor:pointer;}
+  button.small{padding:5px 9px; font-size:12px;}
+  .rec{border:1px solid var(--line); border-radius:10px; padding:10px 12px; margin-bottom:8px; background:#fff;}
+  .rec .head{display:flex; justify-content:space-between; gap:8px; align-items:baseline;}
+  .rec .type{font-weight:700;}
+  .rec .cost{font-weight:700; color:var(--navy); white-space:nowrap;}
+  .rec .meta{font-size:13px; color:var(--gray);}
+  .rec .ops{margin-top:6px; display:flex; gap:6px;}
+  table{width:100%; border-collapse:collapse; font-size:14px;}
+  th,td{padding:7px 6px; border-bottom:1px solid var(--line); text-align:left;}
+  td.num,th.num{text-align:right; font-variant-numeric:tabular-nums;}
+  .total{font-size:18px; font-weight:700; color:var(--navy);}
+  .note{font-size:12px; color:var(--gray);}
+  .empty{color:var(--gray); font-size:14px; padding:10px 0;}
+  .btnrow{display:flex; gap:8px; flex-wrap:wrap; margin-top:10px;}
+  .btnrow button{flex:1; min-width:130px;}
+  .hidden{display:none !important;}
+</style>
+</head>
+<body>
+<header>
+  <h1>🚗 車検・メンテ記録</h1>
+  <p>車検・オイル・タイヤなどの記録と、次回の目安時期をお知らせします</p>
+  <div class="carbar">
+    <select id="carSelect" onchange="onCarChange()"></select>
+    <button onclick="switchTab('settings')">車両の管理</button>
+  </div>
+</header>
+
+<nav class="tabs">
+  <button id="tabbtn-home" class="active" onclick="switchTab('home')">ホーム</button>
+  <button id="tabbtn-records" onclick="switchTab('records')">記録</button>
+  <button id="tabbtn-stats" onclick="switchTab('stats')">集計</button>
+  <button id="tabbtn-settings" onclick="switchTab('settings')">設定</button>
+</nav>
+
+<main>
+  <!-- ホーム -->
+  <section id="tab-home" class="tab active">
+    <div class="card">
+      <h2>現在の走行距離</h2>
+      <div class="row">
+        <div><input type="number" id="curMileage" inputmode="numeric" placeholder="例：38500"></div>
+        <div style="flex:0 0 96px;"><button class="primary" style="margin-top:0;" onclick="updateMileage()">更新</button></div>
+      </div>
+      <p class="note" id="mileageInfo"></p>
+    </div>
+    <div id="dueList"></div>
+    <p class="note">※ 次回時期は一般的な目安です。実際の交換・点検時期は、車の取扱説明書や整備工場の判断を優先してください。距離の目安は「現在の走行距離」を更新すると反映されます。</p>
+  </section>
+
+  <!-- 記録 -->
+  <section id="tab-records" class="tab">
+    <div class="card">
+      <h2 id="recordFormTitle">メンテ記録を追加</h2>
+      <form onsubmit="saveRecord(event)">
+        <label>種類</label>
+        <select id="fType"></select>
+        <p class="note hidden" id="shakenHint">車検の次回目安は、実施日から2年後で計算します（新車の初回車検は、車両の初度登録から3年後が目安です）。</p>
+        <div class="row">
+          <div><label>実施日</label><input type="date" id="fDate" required></div>
+          <div><label>費用（円）</label><input type="number" id="fCost" inputmode="numeric" min="0" placeholder="例：5500"></div>
+        </div>
+        <div class="row">
+          <div><label>走行距離 km（任意）</label><input type="number" id="fMileage" inputmode="numeric" min="0" placeholder="例：35000"></div>
+          <div><label>お店（任意）</label><input type="text" id="fShop" placeholder="例：○○モータース"></div>
+        </div>
+        <label>メモ（任意）</label>
+        <textarea id="fMemo" placeholder="例：5W-30を使用"></textarea>
+        <button class="primary" type="submit" id="recordSubmitBtn">追加する</button>
+        <div class="btnrow hidden" id="editCancelRow">
+          <button class="sub" type="button" onclick="cancelEdit()">編集をやめる</button>
+        </div>
+      </form>
+    </div>
+    <div class="card">
+      <h2>記録一覧</h2>
+      <label>種類で絞り込み</label>
+      <select id="filterType" onchange="renderRecords()"></select>
+      <div id="recordList" style="margin-top:12px;"></div>
+    </div>
+  </section>
+
+  <!-- 集計 -->
+  <section id="tab-stats" class="tab">
+    <div class="card">
+      <h2>費用の集計（選択中の車）</h2>
+      <div id="statsBox"></div>
+    </div>
+  </section>
+
+  <!-- 設定 -->
+  <section id="tab-settings" class="tab">
+    <div class="card">
+      <h2 id="carFormTitle">車両を登録</h2>
+      <form onsubmit="saveCar(event)">
+        <div class="row">
+          <div><label>名前／愛称</label><input type="text" id="cName" placeholder="例：マリン号" required></div>
+          <div><label>車種</label><input type="text" id="cModel" placeholder="例：フィット"></div>
+        </div>
+        <div class="row">
+          <div><label>初度登録年月（車検の初回計算に使用）</label><input type="month" id="cFirstReg"></div>
+          <div><label>現在の走行距離 km</label><input type="number" id="cMileage" inputmode="numeric" min="0" placeholder="例：38500"></div>
+        </div>
+        <label>メモ（任意）</label>
+        <textarea id="cMemo" placeholder="例：グレード、色など"></textarea>
+        <button class="primary" type="submit" id="carSubmitBtn">登録する</button>
+        <div class="btnrow hidden" id="carEditCancelRow">
+          <button class="sub" type="button" onclick="cancelCarEdit()">編集をやめる</button>
+        </div>
+      </form>
+      <h3>登録済みの車両</h3>
+      <div id="carList"></div>
+    </div>
+
+    <div class="card">
+      <h2>データの管理</h2>
+      <p class="note">データはこの端末のブラウザ内（localStorage）に保存されます。機種変更やブラウザのデータ消去に備えて、バックアップの書き出しをおすすめします。</p>
+      <div class="btnrow">
+        <button class="sub" onclick="exportData()">バックアップを書き出す（JSON）</button>
+        <button class="sub" onclick="document.getElementById('importFile').click()">バックアップを読み込む</button>
+        <input type="file" id="importFile" accept=".json,application/json" class="hidden" onchange="importData(event)">
+      </div>
+      <div class="btnrow">
+        <button class="sub" onclick="loadSample()">サンプルデータを読み込む</button>
+        <button class="danger" onclick="deleteAll()">すべてのデータを削除</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>次回目安の間隔について</h2>
+      <div id="intervalInfo"></div>
+      <p class="note">いずれも一般的な目安です。車種・使い方・メーカー推奨によって変わります。</p>
+    </div>
+  </section>
+</main>
+<script>
+/* ================= 純粋ロジック（日付計算・集計） ================= */
+function pad(n){ return String(n).padStart(2,'0'); }
+function fmtDate(y,m,d){ return y + '-' + pad(m) + '-' + pad(d); }
+/* 'YYYY-MM-DD' または 'YYYY-MM'（日は1日扱い）を {y,m,d} に分解。失敗時は null */
+function parseDate(s){
+  if(!s) return null;
+  var p = String(s).split('-').map(Number);
+  if(!p[0] || !p[1]) return null;
+  return { y:p[0], m:p[1], d:p[2] || 1 };
+}
+function addMonths(s, months){
+  var p = parseDate(s); if(!p) return null;
+  var y = p.y + Math.floor((p.m - 1 + months) / 12);
+  var m = ((p.m - 1 + months) % 12) + 1;
+  var last = new Date(y, m, 0).getDate();
+  return fmtDate(y, m, Math.min(p.d, last));
+}
+function addYears(s, years){ return addMonths(s, years * 12); }
+function addDays(s, days){
+  var p = parseDate(s); if(!p) return null;
+  var dt = new Date(p.y, p.m - 1, p.d + days);
+  return fmtDate(dt.getFullYear(), dt.getMonth() + 1, dt.getDate());
+}
+function todayStr(){
+  var t = new Date();
+  return fmtDate(t.getFullYear(), t.getMonth() + 1, t.getDate());
+}
+/* a - b の日数（aが後なら正） */
+function diffDays(a, b){
+  var pa = parseDate(a), pb = parseDate(b);
+  if(!pa || !pb) return null;
+  var da = new Date(pa.y, pa.m - 1, pa.d), db = new Date(pb.y, pb.m - 1, pb.d);
+  return Math.round((da - db) / 86400000);
+}
+
+/* 種類ごとの標準間隔（いずれも一般的な「目安」） */
+var TYPE_INFO = {
+  '車検':               { icon:'📋', note:'初回3年・以降2年（満了日ベース）' },
+  'オイル交換':         { icon:'🛢️', months:6,  km:5000,  note:'6か月 または 5,000km' },
+  'オイル＋フィルター': { icon:'🧴', months:12, km:10000, note:'1年 または 10,000km（オイル交換2回に1回）' },
+  'タイヤ交換':         { icon:'🛞', months:48, note:'4年（ゴムの劣化の目安）' },
+  'タイヤローテーション':{ icon:'🔁', months:6, km:5000,  note:'6か月 または 5,000km' },
+  'バッテリー交換':     { icon:'🔋', months:36, note:'3年（寿命2〜3年の目安）' },
+  'エアコンフィルター': { icon:'🌬️', months:12, km:10000, note:'1年 または 10,000km' },
+  'ワイパー':           { icon:'🌧️', months:12, note:'1年（ゴムの劣化の目安）' },
+  'その他':             { icon:'🔧', note:'自動計算なし' }
+};
+var TYPE_LIST = Object.keys(TYPE_INFO);
+
+function latestRecord(records, type){
+  var f = records.filter(function(r){ return r.type === type; })
+                 .sort(function(a,b){ return a.date < b.date ? -1 : 1; });
+  return f.length ? f[f.length - 1] : null;
+}
+
+/* 指定した種類の「前回実施日」と「次回目安」を返す */
+function nextDueFor(car, records, type){
+  if(type === '車検'){
+    var lastShaken = latestRecord(records, '車検');
+    if(lastShaken) return { type:type, lastDate:lastShaken.date, nextDate:addYears(lastShaken.date, 2), nextKm:null, basis:'前回車検から2年後' };
+    if(car && car.firstReg) return { type:type, lastDate:null, nextDate:addYears(car.firstReg, 3), nextKm:null, basis:'初度登録から3年後（初回車検）' };
+    return { type:type, lastDate:null, nextDate:null, nextKm:null, basis:'初度登録年月が未登録のため計算できません' };
+  }
+  var info = TYPE_INFO[type];
+  var last = latestRecord(records, type);
+  if(!last) return { type:type, lastDate:null, nextDate:null, nextKm:null, basis:'記録がありません' };
+  var nextDate = info.months ? addMonths(last.date, info.months) : null;
+  var nextKm = (info.km && last.mileage !== null && last.mileage !== '' && last.mileage !== undefined)
+               ? Number(last.mileage) + info.km : null;
+  return { type:type, lastDate:last.date, nextDate:nextDate, nextKm:nextKm, basis:'' };
+}
+
+/* 残り日数・残り距離から緊急度を判定（overdue=期限切れ / soon=切迫 / ok=余裕あり / none=判定不可） */
+function statusOf(car, due, today){
+  var daysLeft = due.nextDate ? diffDays(due.nextDate, today) : null;
+  var kmLeft = (due.nextKm !== null && due.nextKm !== undefined && car && car.currentMileage !== null && car.currentMileage !== '' && car.currentMileage !== undefined)
+               ? due.nextKm - Number(car.currentMileage) : null;
+  var level = 'ok';
+  if(daysLeft === null && kmLeft === null) level = 'none';
+  else if((daysLeft !== null && daysLeft < 0) || (kmLeft !== null && kmLeft <= 0)) level = 'overdue';
+  else if((daysLeft !== null && daysLeft <= 30) || (kmLeft !== null && kmLeft <= 500)) level = 'soon';
+  return { level:level, daysLeft:daysLeft, kmLeft:kmLeft };
+}
+
+/* 費用集計：総額・年別・種類別 */
+function summarize(records){
+  var total = 0, byYear = {}, byType = {};
+  records.forEach(function(r){
+    var c = Number(r.cost) || 0;
+    total += c;
+    var y = (r.date || '').slice(0, 4) || '不明';
+    byYear[y] = (byYear[y] || 0) + c;
+    byType[r.type] = (byType[r.type] || 0) + c;
+  });
+  return { total:total, byYear:byYear, byType:byType };
+}
+
+/* ================= データ管理（localStorage） ================= */
+var STORAGE_KEY = 'carMaintenanceApp.v1';
+function defaultState(){ return { cars:[], records:[], activeCarId:null, seq:0 }; }
+function loadState(){
+  try{
+    if(typeof localStorage === 'undefined') return defaultState();
+    var raw = localStorage.getItem(STORAGE_KEY);
+    if(!raw) return defaultState();
+    var s = JSON.parse(raw);
+    if(!s || !Array.isArray(s.cars) || !Array.isArray(s.records)) return defaultState();
+    return s;
+  }catch(e){ return defaultState(); }
+}
+function saveState(){
+  try{ if(typeof localStorage !== 'undefined') localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }catch(e){}
+}
+var state = loadState();
+function uid(){ state.seq = (state.seq || 0) + 1; return 'id' + Date.now().toString(36) + '_' + state.seq; }
+function activeCar(){
+  if(!state.cars.length) return null;
+  var c = state.cars.find(function(x){ return x.id === state.activeCarId; });
+  return c || state.cars[0];
+}
+function carRecords(carId){
+  return state.records.filter(function(r){ return r.carId === carId; });
+}
+function esc(s){
+  return String(s === null || s === undefined ? '' : s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+function yen(n){ return '¥' + (Number(n) || 0).toLocaleString('ja-JP'); }
+function kmFmt(n){ return (Number(n) || 0).toLocaleString('ja-JP') + ' km'; }
+
+/* ================= 画面描画・操作 ================= */
+var editingRecordId = null;
+var editingCarId = null;
+
+function switchTab(name){
+  ['home','records','stats','settings'].forEach(function(t){
+    document.getElementById('tab-' + t).classList.toggle('active', t === name);
+    document.getElementById('tabbtn-' + t).classList.toggle('active', t === name);
+  });
+  if(name === 'home') renderHome();
+  if(name === 'records') renderRecords();
+  if(name === 'stats') renderStats();
+  if(name === 'settings') renderSettings();
+}
+function onCarChange(){
+  var sel = document.getElementById('carSelect');
+  state.activeCarId = sel.value;
+  saveState();
+  renderAll();
+}
+function renderCarSelect(){
+  var sel = document.getElementById('carSelect');
+  var car = activeCar();
+  if(!state.cars.length){
+    sel.innerHTML = '<option value="">（車両が未登録です）</option>';
+    return;
+  }
+  sel.innerHTML = state.cars.map(function(c){
+    return '<option value="' + c.id + '"' + (car && c.id === car.id ? ' selected' : '') + '>' +
+           esc(c.name) + (c.model ? '（' + esc(c.model) + '）' : '') + '</option>';
+  }).join('');
+}
+function renderAll(){
+  renderCarSelect();
+  renderHome(); renderRecords(); renderStats(); renderSettings();
+}
+
+/* ---- ホーム：次回目安 ---- */
+function updateMileage(){
+  var car = activeCar();
+  if(!car){ alert('まず車両を登録してください'); return; }
+  var v = document.getElementById('curMileage').value;
+  if(v === '' || Number(v) < 0){ alert('走行距離を入力してください'); return; }
+  car.currentMileage = Number(v);
+  car.mileageDate = todayStr();
+  saveState();
+  renderHome();
+}
+function renderHome(){
+  var car = activeCar();
+  var box = document.getElementById('dueList');
+  var info = document.getElementById('mileageInfo');
+  var input = document.getElementById('curMileage');
+  if(!car){
+    box.innerHTML = '<div class="card empty">車両が登録されていません。「設定」タブから車両を登録すると、次回の目安がここに表示されます。設定タブには試せるサンプルデータもあります。</div>';
+    info.textContent = '';
+    input.value = '';
+    return;
+  }
+  input.value = (car.currentMileage === null || car.currentMileage === undefined) ? '' : car.currentMileage;
+  info.textContent = car.mileageDate ? ('最終更新：' + car.mileageDate) : '未登録だと、距離ベースの目安は表示されません。';
+  var records = carRecords(car.id);
+  var today = todayStr();
+  var items = TYPE_LIST.map(function(type){
+    var due = nextDueFor(car, records, type);
+    var st = statusOf(car, due, today);
+    return { due:due, st:st };
+  });
+  var rank = { overdue:0, soon:1, ok:2, none:3 };
+  items.sort(function(a, b){
+    if(rank[a.st.level] !== rank[b.st.level]) return rank[a.st.level] - rank[b.st.level];
+    var da = a.st.daysLeft === null ? 99999 : a.st.daysLeft;
+    var db = b.st.daysLeft === null ? 99999 : b.st.daysLeft;
+    return da - db;
+  });
+  box.innerHTML = items.map(function(it){
+    var due = it.due, st = it.st, info2 = TYPE_INFO[due.type];
+    var badge;
+    if(st.level === 'overdue') badge = (st.daysLeft !== null && st.daysLeft < 0) ? '期限切れ（' + Math.abs(st.daysLeft) + '日超過）' : '期限切れ（距離）';
+    else if(st.level === 'soon') badge = (st.daysLeft !== null && st.daysLeft <= 30) ? 'あと ' + st.daysLeft + ' 日' : 'まもなく（距離）';
+    else if(st.level === 'ok') badge = 'あと ' + st.daysLeft + ' 日';
+    else badge = due.lastDate ? '目安なし' : '記録なし';
+    var lines = '';
+    if(due.lastDate) lines += '<div class="meta">前回：' + due.lastDate + '</div>';
+    if(due.nextDate) lines += '<div class="next">次回目安：<strong>' + due.nextDate + '</strong>' + (due.basis ? '（' + esc(due.basis) + '）' : '') + '</div>';
+    else if(due.basis) lines += '<div class="meta">' + esc(due.basis) + '</div>';
+    if(st.kmLeft !== null) lines += '<div class="meta">距離の目安まで：あと ' + st.kmLeft.toLocaleString('ja-JP') + ' km（次回目安 ' + kmFmt(due.nextKm) + '）</div>';
+    else if(due.nextKm !== null && due.nextKm !== undefined) lines += '<div class="meta">距離の目安：' + kmFmt(due.nextKm) + '（現在の走行距離を登録すると残りが分かります）</div>';
+    lines += '<div class="meta">間隔の目安：' + esc(info2.note) + '</div>';
+    return '<div class="card due ' + st.level + '"><div class="head"><span class="type">' + info2.icon + ' ' + esc(due.type) +
+           '</span><span class="badge">' + badge + '</span></div>' + lines + '</div>';
+  }).join('');
+}
+
+/* ---- 記録 ---- */
+function fillTypeSelects(){
+  var fType = document.getElementById('fType');
+  fType.innerHTML = TYPE_LIST.map(function(t){ return '<option value="' + t + '">' + t + '</option>'; }).join('');
+  var filter = document.getElementById('filterType');
+  filter.innerHTML = '<option value="">すべて</option>' + TYPE_LIST.map(function(t){ return '<option value="' + t + '">' + t + '</option>'; }).join('');
+  fType.onchange = function(){
+    document.getElementById('shakenHint').classList.toggle('hidden', fType.value !== '車検');
+  };
+}
+function saveRecord(ev){
+  ev.preventDefault();
+  var car = activeCar();
+  if(!car){ alert('まず車両を登録してください'); switchTab('settings'); return; }
+  var data = {
+    type: document.getElementById('fType').value,
+    date: document.getElementById('fDate').value,
+    cost: document.getElementById('fCost').value === '' ? 0 : Number(document.getElementById('fCost').value),
+    mileage: document.getElementById('fMileage').value === '' ? null : Number(document.getElementById('fMileage').value),
+    shop: document.getElementById('fShop').value.trim(),
+    memo: document.getElementById('fMemo').value.trim()
+  };
+  if(!data.date){ alert('実施日を入力してください'); return; }
+  if(editingRecordId){
+    var r = state.records.find(function(x){ return x.id === editingRecordId; });
+    if(r) Object.assign(r, data);
+  }else{
+    data.id = uid();
+    data.carId = car.id;
+    state.records.push(data);
+  }
+  saveState();
+  cancelEdit();
+  renderRecords(); renderHome(); renderStats();
+}
+function editRecord(id){
+  var r = state.records.find(function(x){ return x.id === id; });
+  if(!r) return;
+  editingRecordId = id;
+  document.getElementById('fType').value = r.type;
+  document.getElementById('fDate').value = r.date;
+  document.getElementById('fCost').value = (r.cost === null || r.cost === undefined) ? '' : r.cost;
+  document.getElementById('fMileage').value = (r.mileage === null || r.mileage === undefined) ? '' : r.mileage;
+  document.getElementById('fShop').value = r.shop || '';
+  document.getElementById('fMemo').value = r.memo || '';
+  document.getElementById('shakenHint').classList.toggle('hidden', r.type !== '車検');
+  document.getElementById('recordFormTitle').textContent = 'メンテ記録を編集';
+  document.getElementById('recordSubmitBtn').textContent = '更新する';
+  document.getElementById('editCancelRow').classList.remove('hidden');
+  switchTab('records');
+  window.scrollTo(0, 0);
+}
+function cancelEdit(){
+  editingRecordId = null;
+  document.getElementById('fDate').value = todayStr();
+  document.getElementById('fCost').value = '';
+  document.getElementById('fMileage').value = '';
+  document.getElementById('fShop').value = '';
+  document.getElementById('fMemo').value = '';
+  document.getElementById('recordFormTitle').textContent = 'メンテ記録を追加';
+  document.getElementById('recordSubmitBtn').textContent = '追加する';
+  document.getElementById('editCancelRow').classList.add('hidden');
+}
+function deleteRecord(id){
+  if(!confirm('この記録を削除しますか？')) return;
+  state.records = state.records.filter(function(x){ return x.id !== id; });
+  saveState();
+  renderRecords(); renderHome(); renderStats();
+}
+function renderRecords(){
+  var car = activeCar();
+  var box = document.getElementById('recordList');
+  if(!car){ box.innerHTML = '<p class="empty">車両が登録されていません。</p>'; return; }
+  var filter = document.getElementById('filterType').value;
+  var list = carRecords(car.id)
+    .filter(function(r){ return !filter || r.type === filter; })
+    .sort(function(a, b){ return a.date < b.date ? 1 : -1; });
+  if(!list.length){ box.innerHTML = '<p class="empty">記録がありません。上のフォームから追加できます。</p>'; return; }
+  box.innerHTML = list.map(function(r){
+    var meta = [r.date];
+    if(r.mileage !== null && r.mileage !== undefined && r.mileage !== '') meta.push(kmFmt(r.mileage));
+    if(r.shop) meta.push(esc(r.shop));
+    var memo = r.memo ? '<div class="meta">' + esc(r.memo) + '</div>' : '';
+    return '<div class="rec"><div class="head"><span class="type">' + (TYPE_INFO[r.type] ? TYPE_INFO[r.type].icon : '') + ' ' + esc(r.type) +
+           '</span><span class="cost">' + yen(r.cost) + '</span></div>' +
+           '<div class="meta">' + meta.join(' ／ ') + '</div>' + memo +
+           '<div class="ops"><button class="sub small" onclick="editRecord(\'' + r.id + '\')">編集</button>' +
+           '<button class="danger small" onclick="deleteRecord(\'' + r.id + '\')">削除</button></div></div>';
+  }).join('');
+}
+
+/* ---- 集計 ---- */
+function renderStats(){
+  var car = activeCar();
+  var box = document.getElementById('statsBox');
+  if(!car){ box.innerHTML = '<p class="empty">車両が登録されていません。</p>'; return; }
+  var records = carRecords(car.id);
+  var s = summarize(records);
+  var all = summarize(state.records);
+  if(!records.length){ box.innerHTML = '<p class="empty">まだ記録がありません。</p>'; return; }
+  var years = Object.keys(s.byYear).sort().reverse();
+  var yearRows = years.map(function(y){
+    return '<tr><td>' + esc(y) + '年</td><td class="num">' + yen(s.byYear[y]) + '</td></tr>';
+  }).join('');
+  var typeRows = TYPE_LIST.filter(function(t){ return s.byType[t]; }).map(function(t){
+    return '<tr><td>' + (TYPE_INFO[t] ? TYPE_INFO[t].icon : '') + ' ' + esc(t) + '</td><td class="num">' + yen(s.byType[t]) + '</td></tr>';
+  }).join('');
+  box.innerHTML =
+    '<p>これまでの合計（' + esc(car.name) + '）</p><p class="total">' + yen(s.total) + '</p>' +
+    '<p class="note">全車両の合計：' + yen(all.total) + '（記録 ' + state.records.length + ' 件）</p>' +
+    '<h3>年別</h3><table>' + yearRows + '</table>' +
+    '<h3>種類別</h3><table>' + typeRows + '</table>';
+}
+
+/* ---- 設定：車両管理 ---- */
+function saveCar(ev){
+  ev.preventDefault();
+  var data = {
+    name: document.getElementById('cName').value.trim(),
+    model: document.getElementById('cModel').value.trim(),
+    firstReg: document.getElementById('cFirstReg').value || '',
+    currentMileage: document.getElementById('cMileage').value === '' ? null : Number(document.getElementById('cMileage').value),
+    memo: document.getElementById('cMemo').value.trim()
+  };
+  if(!data.name){ alert('名前／愛称を入力してください'); return; }
+  if(editingCarId){
+    var c = state.cars.find(function(x){ return x.id === editingCarId; });
+    if(c){ var keepDate = c.mileageDate; Object.assign(c, data); if(data.currentMileage !== null && data.currentMileage !== c.currentMileage) c.mileageDate = todayStr(); else c.mileageDate = keepDate; }
+  }else{
+    data.id = uid();
+    data.mileageDate = data.currentMileage !== null ? todayStr() : null;
+    state.cars.push(data);
+    state.activeCarId = data.id;
+  }
+  saveState();
+  cancelCarEdit();
+  renderAll();
+}
+function editCar(id){
+  var c = state.cars.find(function(x){ return x.id === id; });
+  if(!c) return;
+  editingCarId = id;
+  document.getElementById('cName').value = c.name || '';
+  document.getElementById('cModel').value = c.model || '';
+  document.getElementById('cFirstReg').value = (c.firstReg || '').slice(0, 7);
+  document.getElementById('cMileage').value = (c.currentMileage === null || c.currentMileage === undefined) ? '' : c.currentMileage;
+  document.getElementById('cMemo').value = c.memo || '';
+  document.getElementById('carFormTitle').textContent = '車両を編集';
+  document.getElementById('carSubmitBtn').textContent = '更新する';
+  document.getElementById('carEditCancelRow').classList.remove('hidden');
+  window.scrollTo(0, 0);
+}
+function cancelCarEdit(){
+  editingCarId = null;
+  document.getElementById('cName').value = '';
+  document.getElementById('cModel').value = '';
+  document.getElementById('cFirstReg').value = '';
+  document.getElementById('cMileage').value = '';
+  document.getElementById('cMemo').value = '';
+  document.getElementById('carFormTitle').textContent = '車両を登録';
+  document.getElementById('carSubmitBtn').textContent = '登録する';
+  document.getElementById('carEditCancelRow').classList.add('hidden');
+}
+function deleteCar(id){
+  var c = state.cars.find(function(x){ return x.id === id; });
+  if(!c) return;
+  if(!confirm('「' + c.name + '」と、その車のメンテ記録をすべて削除しますか？')) return;
+  state.cars = state.cars.filter(function(x){ return x.id !== id; });
+  state.records = state.records.filter(function(x){ return x.carId !== id; });
+  if(state.activeCarId === id) state.activeCarId = state.cars.length ? state.cars[0].id : null;
+  saveState();
+  renderAll();
+}
+function selectCar(id){
+  state.activeCarId = id;
+  saveState();
+  renderAll();
+}
+function renderSettings(){
+  var box = document.getElementById('carList');
+  if(!state.cars.length){
+    box.innerHTML = '<p class="empty">まだ車両がありません。上のフォームから登録してください。</p>';
+  }else{
+    box.innerHTML = state.cars.map(function(c){
+      var n = carRecords(c.id).length;
+      var meta = [];
+      if(c.model) meta.push(esc(c.model));
+      if(c.firstReg) meta.push('初度登録 ' + esc(c.firstReg.slice(0, 7)));
+      if(c.currentMileage !== null && c.currentMileage !== undefined) meta.push(kmFmt(c.currentMileage));
+      meta.push('記録 ' + n + ' 件');
+      return '<div class="rec"><div class="head"><span class="type">' + esc(c.name) + '</span>' +
+             (activeCar() && activeCar().id === c.id ? '<span class="cost">表示中</span>' : '') + '</div>' +
+             '<div class="meta">' + meta.join(' ／ ') + '</div>' +
+             (c.memo ? '<div class="meta">' + esc(c.memo) + '</div>' : '') +
+             '<div class="ops"><button class="sub small" onclick="selectCar(\'' + c.id + '\')">この車を表示</button>' +
+             '<button class="sub small" onclick="editCar(\'' + c.id + '\')">編集</button>' +
+             '<button class="danger small" onclick="deleteCar(\'' + c.id + '\')">削除</button></div></div>';
+    }).join('');
+  }
+  document.getElementById('intervalInfo').innerHTML =
+    '<table>' + TYPE_LIST.map(function(t){
+      return '<tr><td>' + TYPE_INFO[t].icon + ' ' + esc(t) + '</td><td>' + esc(TYPE_INFO[t].note) + '</td></tr>';
+    }).join('') + '</table>';
+}
+
+/* ---- バックアップ ---- */
+function exportData(){
+  var payload = { app:'car-maintenance', version:1, exportedAt: todayStr(), cars: state.cars, records: state.records, activeCarId: state.activeCarId };
+  var blob = new Blob([JSON.stringify(payload, null, 2)], { type:'application/json' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url;
+  a.download = 'car-maintenance-backup-' + todayStr() + '.json';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+function importData(ev){
+  var file = ev.target.files && ev.target.files[0];
+  if(!file) return;
+  var reader = new FileReader();
+  reader.onload = function(){
+    try{
+      var s = JSON.parse(reader.result);
+      if(!s || !Array.isArray(s.cars) || !Array.isArray(s.records)) throw new Error('形式が違います');
+      if(!confirm('現在のデータを、バックアップの内容で置き換えますか？')) return;
+      state.cars = s.cars;
+      state.records = s.records;
+      state.activeCarId = s.activeCarId || (s.cars.length ? s.cars[0].id : null);
+      saveState();
+      cancelEdit(); cancelCarEdit();
+      renderAll();
+      alert('読み込みました');
+    }catch(e){
+      alert('読み込めませんでした。バックアップファイル（JSON）を選んでください。');
+    }
+    ev.target.value = '';
+  };
+  reader.readAsText(file);
+}
+function deleteAll(){
+  if(!confirm('車両とメンテ記録をすべて削除しますか？この操作は元に戻せません。')) return;
+  state = defaultState();
+  saveState();
+  cancelEdit(); cancelCarEdit();
+  renderAll();
+}
+
+/* ---- サンプルデータ（日付は今日基準で自動生成） ---- */
+function loadSample(){
+  if(state.cars.length && !confirm('サンプル用の車両と記録を追加しますか？（今のデータは残ります）')) return;
+  var today = todayStr();
+  var car = {
+    id: uid(), name:'サンプル号', model:'コンパクトカー',
+    firstReg: addMonths(today, -26).slice(0, 7),
+    currentMileage: 38500, mileageDate: today,
+    memo:'サンプルデータです。不要になったら設定タブから削除できます。'
+  };
+  state.cars.push(car);
+  state.activeCarId = car.id;
+  var samples = [
+    { type:'オイル交換',         date:addMonths(today, -5),  cost:5500,  mileage:35200, shop:'○○モータース', memo:'5W-30' },
+    { type:'タイヤ交換',         date:addMonths(today, -20), cost:42000, mileage:26800, shop:'タイヤ館○○店', memo:'' },
+    { type:'バッテリー交換',     date:addMonths(today, -38), cost:12800, mileage:15400, shop:'○○モータース', memo:'' },
+    { type:'エアコンフィルター', date:addMonths(today, -8),  cost:3300,  mileage:33100, shop:'', memo:'' },
+    { type:'ワイパー',           date:addMonths(today, -13), cost:1800,  mileage:27900, shop:'', memo:'フロントのみ' }
+  ];
+  samples.forEach(function(s){ s.id = uid(); s.carId = car.id; state.records.push(s); });
+  saveState();
+  renderAll();
+  switchTab('home');
+  alert('サンプルデータを読み込みました。ホームで次回目安の表示を確認できます。');
+}
+
+/* ---- 初期化 ---- */
+function init(){
+  fillTypeSelects();
+  document.getElementById('fDate').value = todayStr();
+  renderAll();
+}
+if(typeof document !== 'undefined'){ init(); }
+</script>
+</body>
+</html>
