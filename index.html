@@ -111,7 +111,11 @@
       <form onsubmit="saveRecord(event)">
         <label>種類</label>
         <select id="fType"></select>
-        <p class="note hidden" id="shakenHint">車検の次回目安は、実施日から2年後で計算します（新車の初回車検は、車両の初度登録から3年後が目安です）。</p>
+        <p class="note hidden" id="shakenHint">車検の次回目安は、車検証に記載の「車検満了日」を入力するとその日付をそのまま使います。未入力の場合は実施日から2年後で計算します（新車の初回車検は、車両の初度登録から3年後が目安です）。</p>
+        <div class="hidden" id="shakenExpiryRow">
+          <label>車検満了日（任意・車検証に記載の日付）</label>
+          <input type="date" id="fShakenExpiry">
+        </div>
         <div class="row">
           <div><label>実施日</label><input type="date" id="fDate" required></div>
           <div><label>費用（円）</label><input type="number" id="fCost" inputmode="numeric" min="0" placeholder="例：5500"></div>
@@ -249,6 +253,7 @@ function latestRecord(records, type){
 function nextDueFor(car, records, type){
   if(type === '車検'){
     var lastShaken = latestRecord(records, '車検');
+    if(lastShaken && lastShaken.shakenExpiry && parseDate(lastShaken.shakenExpiry)) return { type:type, lastDate:lastShaken.date, nextDate:lastShaken.shakenExpiry, nextKm:null, basis:'満了日（入力値）' };
     if(lastShaken) return { type:type, lastDate:lastShaken.date, nextDate:addYears(lastShaken.date, 2), nextKm:null, basis:'前回車検から2年後' };
     if(car && car.firstReg) return { type:type, lastDate:null, nextDate:addYears(car.firstReg, 3), nextKm:null, basis:'初度登録から3年後（初回車検）' };
     return { type:type, lastDate:null, nextDate:null, nextKm:null, basis:'初度登録年月が未登録のため計算できません' };
@@ -422,7 +427,9 @@ function fillTypeSelects(){
   var filter = document.getElementById('filterType');
   filter.innerHTML = '<option value="">すべて</option>' + TYPE_LIST.map(function(t){ return '<option value="' + t + '">' + t + '</option>'; }).join('');
   fType.onchange = function(){
-    document.getElementById('shakenHint').classList.toggle('hidden', fType.value !== '車検');
+    var isShaken = fType.value === '車検';
+    document.getElementById('shakenHint').classList.toggle('hidden', !isShaken);
+    document.getElementById('shakenExpiryRow').classList.toggle('hidden', !isShaken);
   };
 }
 function saveRecord(ev){
@@ -437,6 +444,9 @@ function saveRecord(ev){
     shop: document.getElementById('fShop').value.trim(),
     memo: document.getElementById('fMemo').value.trim()
   };
+  /* 車検満了日は種類が「車検」のときだけ保存する（他の種類では使わない） */
+  var expiryVal = document.getElementById('fShakenExpiry').value;
+  data.shakenExpiry = (data.type === '車検' && expiryVal) ? expiryVal : null;
   if(!data.date){ alert('実施日を入力してください'); return; }
   if(editingRecordId){
     var r = state.records.find(function(x){ return x.id === editingRecordId; });
@@ -460,7 +470,9 @@ function editRecord(id){
   document.getElementById('fMileage').value = (r.mileage === null || r.mileage === undefined) ? '' : r.mileage;
   document.getElementById('fShop').value = r.shop || '';
   document.getElementById('fMemo').value = r.memo || '';
+  document.getElementById('fShakenExpiry').value = r.shakenExpiry || '';
   document.getElementById('shakenHint').classList.toggle('hidden', r.type !== '車検');
+  document.getElementById('shakenExpiryRow').classList.toggle('hidden', r.type !== '車検');
   document.getElementById('recordFormTitle').textContent = 'メンテ記録を編集';
   document.getElementById('recordSubmitBtn').textContent = '更新する';
   document.getElementById('editCancelRow').classList.remove('hidden');
@@ -474,6 +486,8 @@ function cancelEdit(){
   document.getElementById('fMileage').value = '';
   document.getElementById('fShop').value = '';
   document.getElementById('fMemo').value = '';
+  document.getElementById('fShakenExpiry').value = '';
+  document.getElementById('shakenExpiryRow').classList.toggle('hidden', document.getElementById('fType').value !== '車検');
   document.getElementById('recordFormTitle').textContent = 'メンテ記録を追加';
   document.getElementById('recordSubmitBtn').textContent = '追加する';
   document.getElementById('editCancelRow').classList.add('hidden');
@@ -495,6 +509,7 @@ function renderRecords(){
   if(!list.length){ box.innerHTML = '<p class="empty">記録がありません。上のフォームから追加できます。</p>'; return; }
   box.innerHTML = list.map(function(r){
     var meta = [r.date];
+    if(r.type === '車検' && r.shakenExpiry) meta.push('満了日 ' + r.shakenExpiry);
     if(r.mileage !== null && r.mileage !== undefined && r.mileage !== '') meta.push(kmFmt(r.mileage));
     if(r.shop) meta.push(esc(r.shop));
     var memo = r.memo ? '<div class="meta">' + esc(r.memo) + '</div>' : '';
